@@ -6,14 +6,22 @@ Live site: https://dusklegends-hue.github.io/TLS-TOURNEY-STAT-TOOL/
 
 ## What it does
 
-Captures every tournament custom that gets played, then presents it three ways:
+Captures every tournament custom that gets played, then presents it four ways.
 
-- **Custom Stats** — every logged game, newest first, with the full stat table per player. This
-  is also where you assign each side to a division once the game is done.
-- **Teams** — a page per division (Surge, Hardwire, Overclock): record, side splits, roster and
-  game log.
-- **Leaderboard** — players ranked across a division's games, with a dropdown for the division
-  and another for what to rank by.
+**Surge, Hardwire and Overclock are divisions, not teams.** Each division holds its own teams,
+and each team holds its players by Riot ID. That Riot ID is what links a scoreboard line to a
+roster, so it has to include the tag — `Name#TAG`.
+
+- **Custom Stats** — one team's numbers across every game it played, with a division filter
+  narrowing the team list. Player averages, side splits, record.
+- **Teams** — create teams inside a division, add players by Riot ID, move a team between
+  divisions, delete.
+- **Leaderboard** — players ranked across a whole division or a single team, with a dropdown
+  for what to rank by.
+- **Game History** — every capture, newest first, and where each side gets assigned to a team.
+
+Players are matched to rosters **when the page renders**, not when the game is captured. Add a
+player to a roster today and every game they already appear in credits them immediately.
 
 ## Capturing games
 
@@ -51,8 +59,8 @@ That one only works from an account that played the game.
 
 ## Storage
 
-Games live in Firestore, in the `customGames` collection, and every TLS document carries
-`org: "TLS"` with a `tls-` id prefix. That's a deliberate workaround rather than a design
+Games live in Firestore in `customGames` and teams live in `notes`, and every TLS document
+carries `org: "TLS"` (games also take a `tls-` id prefix). That's a deliberate workaround rather than a design
 choice: the project's security rules name each collection explicitly, so a brand new collection
 is rejected until someone edits them in the Firebase console.
 

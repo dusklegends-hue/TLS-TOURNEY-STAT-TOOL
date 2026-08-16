@@ -4,7 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>TLS Tourney Stat Tool</title>
-<link rel="stylesheet" href="style.css?v=1" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>" />
+<!-- The ?v= tag pins a cached index.html to the app.js/style.css it shipped with. Bump both on
+     every deploy that touches either file. -->
+<link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
   <header class="topbar">
@@ -25,34 +28,48 @@
 
   <main id="app" class="app hidden">
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="games">Custom Stats</button>
+      <button class="tab-btn active" data-tab="stats">Custom Stats</button>
       <button class="tab-btn" data-tab="teams">Teams</button>
       <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+      <button class="tab-btn" data-tab="history">Game History</button>
     </nav>
 
-    <!-- ---------------------------------------------------------------- Games -->
-    <section id="gamesTab" class="tab-panel active">
+    <!-- --------------------------------------------------------- Custom Stats -->
+    <section id="statsTab" class="tab-panel active">
       <div class="panel-head">
         <div>
-          <h2>Logged Customs</h2>
-          <p class="hint">
-            Every custom captured by the logger, newest first. Assign each side to a team once the
-            game is done — the Teams and Leaderboard pages are built from those assignments.
-          </p>
+          <h2>Custom Stats</h2>
+          <p class="hint">Everything one team has done across its logged games. Pick a division to narrow the team list.</p>
         </div>
         <div class="filter-row">
-          <label for="gamesTeamFilter">Show</label>
-          <select id="gamesTeamFilter"></select>
+          <label for="statsDivision">Division</label>
+          <select id="statsDivision"></select>
+          <label for="statsTeam">Team</label>
+          <select id="statsTeam"></select>
         </div>
       </div>
-      <div id="gamesStatus" class="status-line"></div>
-      <div id="gamesList" class="games-list"></div>
+      <div id="statsBody"></div>
     </section>
 
     <!-- ---------------------------------------------------------------- Teams -->
     <section id="teamsTab" class="tab-panel">
-      <nav id="teamTabs" class="team-tabs"></nav>
-      <div id="teamPanel" class="team-panel"></div>
+      <div class="panel-head">
+        <div>
+          <h2>Teams</h2>
+          <p class="hint">
+            Surge, Hardwire and Overclock are divisions. Each holds its own teams, and each team
+            holds its players by Riot ID — that is what links a scoreboard line to a roster.
+          </p>
+        </div>
+      </div>
+      <nav id="divisionTabs" class="team-tabs"></nav>
+
+      <form id="addTeamForm" class="inline-form">
+        <input id="newTeamName" type="text" placeholder="New team name…" autocomplete="off" required />
+        <button type="submit">Add team</button>
+      </form>
+
+      <div id="teamsList" class="teams-list"></div>
     </section>
 
     <!-- ---------------------------------------------------------- Leaderboard -->
@@ -60,19 +77,42 @@
       <div class="panel-head">
         <div>
           <h2>Leaderboard</h2>
-          <p class="hint">Ranked across every game a division has played. Minimum one game to appear.</p>
+          <p class="hint">Ranked across every game the selection has played. A player needs one game to appear.</p>
         </div>
         <div class="filter-row">
           <label for="leaderboardDivision">Division</label>
           <select id="leaderboardDivision"></select>
+          <label for="leaderboardTeam">Team</label>
+          <select id="leaderboardTeam"></select>
           <label for="leaderboardMetric">Rank by</label>
           <select id="leaderboardMetric"></select>
         </div>
       </div>
       <div id="leaderboardBody" class="leaderboard-body"></div>
     </section>
+
+    <!-- --------------------------------------------------------- Game History -->
+    <section id="historyTab" class="tab-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Game History</h2>
+          <p class="hint">
+            Every custom the logger captured, newest first. Assign each side to a team once the
+            game is done — nothing counts towards a team until you do.
+          </p>
+        </div>
+        <div class="filter-row">
+          <label for="historyDivision">Division</label>
+          <select id="historyDivision"></select>
+          <label for="historyTeam">Team</label>
+          <select id="historyTeam"></select>
+        </div>
+      </div>
+      <div id="historyStatus" class="status-line"></div>
+      <div id="historyList" class="games-list"></div>
+    </section>
   </main>
 
-  <script type="module" src="app.js?v=1"></script>
+  <script type="module" src="app.js?v=2"></script>
 </body>
 </html>
