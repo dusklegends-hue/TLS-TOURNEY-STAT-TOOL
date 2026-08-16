@@ -287,7 +287,6 @@ function buildGameCard(game) {
   if (game.resultKnown === false) {
     // A spectator capture cannot tell which side won, so it is set here once rather than
     // guessed at capture time and silently recorded wrong.
-    DIVISIONS.length; // (no-op, keeps the intent obvious below)
     [100, 200].forEach((teamId) => {
       const btn = document.createElement("button");
       btn.type = "button";
