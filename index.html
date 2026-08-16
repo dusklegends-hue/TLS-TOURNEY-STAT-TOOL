@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TLS Tourney Stat Tool</title>
+<link rel="stylesheet" href="style.css?v=1" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="crest" aria-hidden="true"><span>TLS</span></div>
+      <div class="brand-text">
+        <h1>TLS Tourney Stat Tool</h1>
+        <span class="brand-sub">The Loading Screen</span>
+      </div>
+    </div>
+    <span id="statusBadge" class="status-badge">loading…</span>
+  </header>
+
+  <div id="loadingScreen" class="loading-screen">
+    <div class="spinner"></div>
+    <p>Loading champion data and match archive…</p>
+  </div>
+
+  <main id="app" class="app hidden">
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="games">Custom Stats</button>
+      <button class="tab-btn" data-tab="teams">Teams</button>
+      <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+    </nav>
+
+    <!-- ---------------------------------------------------------------- Games -->
+    <section id="gamesTab" class="tab-panel active">
+      <div class="panel-head">
+        <div>
+          <h2>Logged Customs</h2>
+          <p class="hint">
+            Every custom captured by the logger, newest first. Assign each side to a team once the
+            game is done — the Teams and Leaderboard pages are built from those assignments.
+          </p>
+        </div>
+        <div class="filter-row">
+          <label for="gamesTeamFilter">Show</label>
+          <select id="gamesTeamFilter"></select>
+        </div>
+      </div>
+      <div id="gamesStatus" class="status-line"></div>
+      <div id="gamesList" class="games-list"></div>
+    </section>
+
+    <!-- ---------------------------------------------------------------- Teams -->
+    <section id="teamsTab" class="tab-panel">
+      <nav id="teamTabs" class="team-tabs"></nav>
+      <div id="teamPanel" class="team-panel"></div>
+    </section>
+
+    <!-- ---------------------------------------------------------- Leaderboard -->
+    <section id="leaderboardTab" class="tab-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Leaderboard</h2>
+          <p class="hint">Ranked across every game a division has played. Minimum one game to appear.</p>
+        </div>
+        <div class="filter-row">
+          <label for="leaderboardDivision">Division</label>
+          <select id="leaderboardDivision"></select>
+          <label for="leaderboardMetric">Rank by</label>
+          <select id="leaderboardMetric"></select>
+        </div>
+      </div>
+      <div id="leaderboardBody" class="leaderboard-body"></div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js?v=1"></script>
+</body>
+</html>
