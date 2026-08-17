@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>" />
 <!-- The ?v= tag pins a cached index.html to the app.js/style.css it shipped with. Bump both on
      every deploy that touches either file. -->
-<link rel="stylesheet" href="style.css?v=2" />
+<link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
   <header class="topbar">
@@ -18,7 +18,14 @@
         <span class="brand-sub">The Loading Screen</span>
       </div>
     </div>
-    <span id="statusBadge" class="status-badge">loading…</span>
+    <div class="header-right">
+      <span id="statusBadge" class="status-badge">loading…</span>
+      <div id="authBox" class="auth-box">
+        <span id="authWho" class="auth-who"></span>
+        <button id="signInBtn" type="button" class="auth-btn">Staff sign in</button>
+        <button id="signOutBtn" type="button" class="auth-btn hidden">Sign out</button>
+      </div>
+    </div>
   </header>
 
   <div id="loadingScreen" class="loading-screen">
@@ -113,6 +120,6 @@
     </section>
   </main>
 
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

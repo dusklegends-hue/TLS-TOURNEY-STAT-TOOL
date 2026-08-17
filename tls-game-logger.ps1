@@ -45,7 +45,10 @@ report it back so the script can be fixed.
 param([long]$BackfillGameId = 0)
 
 $ErrorActionPreference = "Stop"
-$FirestoreBase = "https://firestore.googleapis.com/v1/projects/champ-pool-lwg/databases/(default)/documents"
+# The TLS Firebase project id. Set this to match projectId in config.js after creating the
+# project - see SETUP.md. Until it is set, uploads go nowhere and the script says so.
+$ProjectId = "REPLACE_ME"
+$FirestoreBase = "https://firestore.googleapis.com/v1/projects/$ProjectId/databases/(default)/documents"
 # Every document this script writes is tagged to the org and id-prefixed, so one collection
 # can hold two tools' archives without either reading the other's games.
 $Org = "TLS"
@@ -723,6 +726,12 @@ if ($BackfillGameId) {
   Send-CustomGameToFirestore -gameId $BackfillGameId -matchData $matchData
   Write-Log "Backfilled custom game $BackfillGameId - it should be on the Customs tab now."
   exit 0
+}
+
+if ($ProjectId -eq "REPLACE_ME") {
+  Write-Log "ProjectId is not set yet. Open this script, set `$ProjectId to the TLS Firebase project id"
+  Write-Log "(the same projectId that is in config.js), then run it again. See SETUP.md."
+  exit 1
 }
 
 Write-Log "Custom Game Logger starting. Waiting for League client..."

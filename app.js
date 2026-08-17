@@ -11,11 +11,11 @@ Four pages:
   Leaderboard   — players ranked across a division or a single team
   Game History  — the raw capture list, and where a side gets assigned to a team
 
-Storage note: this shares the Firestore project the LWG tool uses, because the security rules
-name each collection explicitly and a brand new collection is denied until someone edits them in
-the console. Games live in customGames and teams live in notes, both carrying org: "TLS". Every
-read filters on that marker, so moving to a dedicated project later is a config change here and
-in the logger, and nothing else.
+Storage: its own Firebase project — games in customGames, teams in teams. Reading is open to
+anyone, because results are meant to be public. Every change is gated: firestore.rules lets the
+logger create a capture unauthenticated (it runs on players' machines, where a shared credential
+would be worse), and restricts every edit after that to signed-in staff. Signing in here only
+obtains a token; whether that token can write is decided by the rules, not by this file.
 
 Players are resolved to teams at render time by Riot ID rather than stamped in at capture time.
 Add a player to a roster today and every game they already appear in credits them immediately.
@@ -30,25 +30,36 @@ import {
   deleteDoc,
   onSnapshot,
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import { FIREBASE_CONFIG, STAFF_HINT, ORG, DIVISIONS } from "./config.js";
 
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDXoWE7c9CgXqDfCaHBfQJhoKkcU5AUv88",
-  authDomain: "champ-pool-lwg.firebaseapp.com",
-  projectId: "champ-pool-lwg",
-  storageBucket: "champ-pool-lwg.firebasestorage.app",
-  messagingSenderId: "201269608329",
-  appId: "1:201269608329:web:98929bafcc725619dd2b58",
-};
-
-const ORG = "TLS";
-const TEAM_TYPE = "tlsTeam";
-const DIVISIONS = ["Surge", "Hardwire", "Overclock"];
+const TEAMS_COLLECTION = "teams";
 const DIVISION_COLORS = { Surge: "var(--surge)", Hardwire: "var(--hardwire)", Overclock: "var(--overclock)" };
 const DDRAGON = "https://ddragon.leagueoflegends.com";
 
-const db = getFirestore(initializeApp(FIREBASE_CONFIG));
+// Until the project exists, say so in plain words. Left alone, the Firebase SDK throws
+// something cryptic and the page just sits on the spinner looking broken.
+if (FIREBASE_CONFIG.projectId === "REPLACE_ME") {
+  document.getElementById("loadingScreen").innerHTML =
+    `<h2 style="color:#e9c14a;margin:0 0 8px">Not connected yet</h2>` +
+    `<p style="max-width:520px;text-align:center;line-height:1.6">` +
+    `This site needs its Firebase project before it can load anything. Create it, then paste the ` +
+    `config into <code>config.js</code> and the project id into <code>tls-game-logger.ps1</code>.` +
+    `<br><br>Step-by-step in <b>SETUP.md</b> in the repo.</p>`;
+  throw new Error("Firebase project not configured — see SETUP.md");
+}
+
+const firebaseApp = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(firebaseApp);
+const auth = getAuth(firebaseApp);
 const gamesCol = collection(db, "customGames");
-const notesCol = collection(db, "notes");
+const teamsCol = collection(db, TEAMS_COLLECTION);
 
 const els = {};
 let games = [];
@@ -65,6 +76,7 @@ let leaderboardTeamId = "";
 let leaderboardMetric = "kda";
 let expanded = new Set();
 let statusText = "";
+let currentUser = null;
 
 /* ------------------------------------------------------------------ Metrics */
 
@@ -119,11 +131,10 @@ async function init() {
     );
 
     onSnapshot(
-      notesCol,
+      teamsCol,
       (snap) => {
         teams = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((t) => t.org === ORG && t.type === TEAM_TYPE)
           .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         renderAll();
         done();
@@ -147,7 +158,7 @@ function failLoad() {
 
 function cacheEls() {
   const ids = [
-    "app", "statusBadge", "statsDivision", "statsTeam", "statsBody",
+    "app", "statusBadge", "authBox", "signInBtn", "signOutBtn", "authWho", "statsDivision", "statsTeam", "statsBody",
     "divisionTabs", "addTeamForm", "newTeamName", "teamsList",
     "leaderboardDivision", "leaderboardTeam", "leaderboardMetric", "leaderboardBody",
     "historyDivision", "historyTeam", "historyStatus", "historyList",
@@ -158,6 +169,27 @@ function cacheEls() {
 function bindEvents() {
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+
+  els.signInBtn.addEventListener("click", async () => {
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (err) {
+      console.error(err);
+      // A closed popup is someone changing their mind, not a fault worth shouting about.
+      if (err.code !== "auth/popup-closed-by-user") alert(`Sign-in failed: ${err.message}`);
+    }
+  });
+
+  els.signOutBtn.addEventListener("click", () => signOut(auth).catch((err) => console.error(err)));
+
+  // Whether this account is actually staff is decided by the rules, not here. The page reflects
+  // signed-in vs not; a signed-in non-staff account simply has its writes refused, and
+  // reportWriteError explains that when it happens.
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    renderAuth();
+    renderAll();
   });
 
   DIVISIONS.forEach((division) => {
@@ -178,6 +210,7 @@ function bindEvents() {
 
   els.addTeamForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!canEdit()) return alert("Sign in with a staff account to add a team.");
     const name = els.newTeamName.value.trim();
     if (!name) return;
     addTeam(name, activeDivision);
@@ -218,6 +251,36 @@ function bindEvents() {
     leaderboardMetric = els.leaderboardMetric.value;
     renderLeaderboard();
   });
+}
+
+function renderAuth() {
+  const signedIn = Boolean(currentUser);
+  els.signInBtn.classList.toggle("hidden", signedIn);
+  els.signOutBtn.classList.toggle("hidden", !signedIn);
+  els.authWho.textContent = signedIn ? currentUser.email || "signed in" : "";
+  els.authWho.title = signedIn ? "" : STAFF_HINT;
+  els.authBox.classList.toggle("signed-in", signedIn);
+}
+
+const canEdit = () => Boolean(currentUser);
+
+// One message for the two ways a write can be refused: not signed in at all, or signed in with
+// an account the rules do not list. Both look identical from the button, so the text has to
+// name both possibilities rather than guess.
+function reportWriteError(err, what) {
+  console.error(err);
+  if (err?.code === "permission-denied") {
+    alert(
+      `Not allowed to ${what}.
+
+` +
+        (currentUser
+          ? `${currentUser.email} is signed in but is not on the staff list in firestore.rules.`
+          : "Sign in with a staff account first.")
+    );
+    return;
+  }
+  alert(`Could not ${what} — ${err?.message || "check your connection."}`);
 }
 
 function switchTab(tab) {
@@ -530,6 +593,8 @@ function statCard(label, value, sub) {
 /* -------------------------------------------------------------------- Teams */
 
 function renderTeamsTab() {
+  els.addTeamForm.querySelectorAll("input, button").forEach((el) => { el.disabled = !canEdit(); });
+  els.addTeamForm.title = canEdit() ? "" : STAFF_HINT;
   els.teamsList.innerHTML = "";
   const list = teams.filter((t) => t.division === activeDivision);
 
@@ -562,7 +627,8 @@ function buildTeamCard(team) {
   const moveLabel = document.createElement("select");
   fillSelect(moveLabel, DIVISIONS.map((d) => ({ value: d, label: d })), team.division);
   moveLabel.value = team.division;
-  moveLabel.title = "Move this team to another division";
+  moveLabel.title = canEdit() ? "Move this team to another division" : "Sign in as staff to move this team";
+  moveLabel.disabled = !canEdit();
   moveLabel.addEventListener("change", () => updateTeam(team.id, { division: moveLabel.value }));
   actions.appendChild(moveLabel);
 
@@ -570,6 +636,8 @@ function buildTeamCard(team) {
   del.type = "button";
   del.className = "ghost-btn";
   del.textContent = "Delete";
+  del.disabled = !canEdit();
+  if (!canEdit()) del.title = "Sign in as staff to delete a team";
   del.addEventListener("click", () => {
     if (confirm(`Delete ${team.name}? Games already assigned to it keep the assignment but will show as unknown.`)) {
       deleteTeam(team.id);
@@ -600,7 +668,8 @@ function buildTeamCard(team) {
     remove.type = "button";
     remove.className = "ghost-btn";
     remove.textContent = "×";
-    remove.title = `Remove ${player.riotId}`;
+    remove.title = canEdit() ? `Remove ${player.riotId}` : "Sign in as staff to change a roster";
+    remove.disabled = !canEdit();
     remove.addEventListener("click", () => {
       const next = players.filter((_, i) => i !== index);
       updateTeam(team.id, { players: next });
@@ -626,8 +695,11 @@ function buildTeamCard(team) {
   add.textContent = "Add player";
   form.append(riot, display, add);
 
+  [riot, display, add].forEach((el) => { el.disabled = !canEdit(); });
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!canEdit()) return;
     const riotId = riot.value.trim();
     if (!riotId) return;
     // Matching against a scoreboard needs the tag; without it nothing will ever link up.
@@ -651,8 +723,7 @@ function buildTeamCard(team) {
 async function addTeam(name, division) {
   const id = crypto.randomUUID();
   try {
-    await setDoc(doc(notesCol, id), {
-      type: TEAM_TYPE,
+    await setDoc(doc(teamsCol, id), {
       org: ORG,
       name,
       division,
@@ -660,26 +731,23 @@ async function addTeam(name, division) {
       createdAt: new Date(),
     });
   } catch (err) {
-    console.error(err);
-    alert("Could not add that team — check your connection.");
+    reportWriteError(err, "add that team");
   }
 }
 
 async function updateTeam(id, changes) {
   try {
-    await updateDoc(doc(notesCol, id), changes);
+    await updateDoc(doc(teamsCol, id), changes);
   } catch (err) {
-    console.error(err);
-    alert("Could not save that change — check your connection.");
+    reportWriteError(err, "save that change");
   }
 }
 
 async function deleteTeam(id) {
   try {
-    await deleteDoc(doc(notesCol, id));
+    await deleteDoc(doc(teamsCol, id));
   } catch (err) {
-    console.error(err);
-    alert("Could not delete that team — check your connection.");
+    reportWriteError(err, "delete that team");
   }
 }
 
@@ -749,7 +817,11 @@ function renderHistoryTab() {
   const unassigned = games.filter((g) => !assignedTeamId(g, 100) && !assignedTeamId(g, 200)).length;
   els.historyStatus.textContent =
     statusText ||
-    (unassigned ? `${unassigned} game${unassigned === 1 ? "" : "s"} still need a team assigned.` : "");
+    (!canEdit()
+      ? "Viewing as a guest — sign in with a staff account to assign teams or set results."
+      : unassigned
+      ? `${unassigned} game${unassigned === 1 ? "" : "s"} still need a team assigned.`
+      : "");
 
   if (!list.length) {
     els.historyList.innerHTML = `<p class="empty-state">${
@@ -791,6 +863,8 @@ function buildGameCard(game) {
       btn.type = "button";
       btn.className = "ghost-btn";
       btn.textContent = `${sideName(side)} won`;
+      btn.disabled = !canEdit();
+      if (!canEdit()) btn.title = "Sign in as staff to set the result";
       btn.addEventListener("click", () => setWinner(game, side));
       actions.appendChild(btn);
     });
@@ -871,6 +945,8 @@ function buildSide(game, side) {
   select.value = current || "";
   const assignedTeam = teamById(current);
   if (assignedTeam) select.style.borderColor = DIVISION_COLORS[assignedTeam.division];
+  select.disabled = !canEdit();
+  if (!canEdit()) select.title = "Sign in as staff to assign a team";
   select.addEventListener("change", () => assignTeam(game, side, select.value || null));
   assign.append(label, select);
   wrap.appendChild(assign);
@@ -1052,8 +1128,7 @@ async function assignTeam(game, side, teamId) {
     await updateDoc(doc(gamesCol, game.id), { teamAssignment: next });
     statusText = "";
   } catch (err) {
-    console.error(err);
-    statusText = "Could not save that assignment — check your connection.";
+    reportWriteError(err, "assign that team");
     renderHistoryTab();
   }
 }
@@ -1066,8 +1141,7 @@ async function setWinner(game, winningSide) {
   try {
     await updateDoc(doc(gamesCol, game.id), { participants, resultKnown: true });
   } catch (err) {
-    console.error(err);
-    statusText = "Could not save that result — check your connection.";
+    reportWriteError(err, "set that result");
     renderHistoryTab();
   }
 }

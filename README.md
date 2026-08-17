@@ -57,20 +57,34 @@ powershell -ExecutionPolicy Bypass -File tls-game-logger.ps1 -BackfillGameId 562
 
 That one only works from an account that played the game.
 
-## Storage
+## Setup
 
-Games live in Firestore in `customGames` and teams live in `notes`, and every TLS document
-carries `org: "TLS"` (games also take a `tls-` id prefix). That's a deliberate workaround rather than a design
-choice: the project's security rules name each collection explicitly, so a brand new collection
-is rejected until someone edits them in the Firebase console.
+**The site needs its own Firebase project before it will load.** Everything in the code is
+ready; what's left is the console work only an owner can do. See **[SETUP.md](SETUP.md)** —
+about fifteen minutes, and the site tells you so on screen until it's done.
 
-Two consequences worth knowing:
+## Storage and access
 
-1. **Moving to a dedicated Firebase project is a one-file change.** Every read filters on the
-   org marker already, so it's `FIREBASE_CONFIG` in `app.js` and `$FirestoreBase` in the logger.
-2. **The database is currently open.** Anyone with the public config can read and write. That is
-   fine for a small trusted group and is *not* fine once results matter to people outside it.
-   Auth and real rules are the first thing to fix before this goes anywhere public.
+Its own Firebase project: games in `customGames`, teams in `teams`.
+
+| Action | Who can |
+|---|---|
+| Read anything | Anyone — results are public on purpose |
+| Upload a capture | Anyone, if it passes shape validation. The logger runs on players' machines with no login |
+| Assign a team, set a result | Signed-in staff, and only those fields |
+| Change captured stats | Nobody. A finished game is history |
+| Delete a game, manage teams | Signed-in staff |
+
+Staff are an email allowlist inside [`firestore.rules`](firestore.rules). Adding someone is
+editing that list and pressing Publish — no code change, no deploy. Signing in on the site only
+gets a token; whether it can write is decided by the rules.
+
+The Firebase config in `config.js` is **not** a secret. It ships to every browser that loads the
+page and identifies the project without authorising anything.
+
+Known gap, stated plainly: the logger uploads unauthenticated, so someone who knew the project
+id could post a fabricated game. They could not alter or delete a real one. The fix, when it
+matters, is putting uploads behind a Cloudflare Worker holding the only credential.
 
 ## Layout
 

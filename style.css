@@ -105,6 +105,61 @@ html, body {
   color: var(--cyan);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.auth-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-who {
+  font-size: 0.72rem;
+  color: var(--cyan);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-btn {
+  background: transparent;
+  border: 1px solid var(--gold-deep);
+  color: var(--gold);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.auth-btn:hover {
+  background: rgba(233, 193, 74, 0.12);
+  color: var(--gold-bright);
+}
+
+/* Signed in is a quieter state than signed out — the button you want people to notice is the
+   one they have not pressed yet. */
+.auth-box.signed-in .auth-btn {
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+
+/* Disabled controls should read as "not yours to touch", not as broken. */
+button:disabled,
+select:disabled,
+input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .status-badge {
   font-size: 0.72rem;
   padding: 5px 12px;

@@ -1,0 +1,73 @@
+rules_version = '2';
+
+// TLS Tourney Stat Tool — Firestore security rules
+// ================================================
+// Paste this into Firebase console > Firestore Database > Rules > Publish.
+//
+// The shape of the problem: results are meant to be public, the logger runs on players' own
+// machines with no login, and nothing should ever be able to quietly rewrite a finished game.
+// So reads are open, captures may be created by anyone but only if they look like a real
+// capture, and every change after that is staff-only.
+//
+// Add or remove staff by editing the list in isStaff() and pressing Publish. That is the only
+// place membership is decided — the app's sign-in button just gets a token, it grants nothing.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+             'duskliberty@gmail.com'
+             // , 'someone.else@example.com'
+           ];
+    }
+
+    // Enough shape checking that a malformed or junk write is rejected at the door, without
+    // being so strict that a logger change breaks uploads. It does not try to prove the numbers
+    // are true — nothing here can — only that this is a capture and not garbage.
+    function looksLikeCapture() {
+      return request.resource.data.org == 'TLS'
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() > 0
+        && request.resource.data.participants.size() <= 10
+        && request.resource.data.capturedAt is timestamp
+        && request.resource.data.source in ['player', 'spectator'];
+    }
+
+    // The only edits the site makes to a finished game: assigning a side to a team, and setting
+    // the winner on a spectator capture that could not know it. Anything else is refused, so a
+    // stray or malicious write cannot quietly restate what happened in a game.
+    function onlyEditsAssignmentOrResult() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['teamAssignment', 'participants', 'resultKnown']);
+    }
+
+    match /customGames/{gameId} {
+      allow read: if true;
+
+      // Unauthenticated on purpose: the logger runs wherever the game is being played, and
+      // handing a shared credential to every machine in a lobby would be worse than this.
+      // Tighten later by giving the logger its own account and requiring request.auth here.
+      allow create: if looksLikeCapture();
+
+      allow update: if isStaff() && onlyEditsAssignmentOrResult();
+
+      // Deleting a game is destroying the record. Staff only, and deliberately not something
+      // the site offers a button for.
+      allow delete: if isStaff();
+    }
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow create, update, delete: if isStaff();
+    }
+
+    // Nothing else in this project is writable. A collection that does not exist here cannot be
+    // created by a client, which is what stops someone using the project as free storage.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
